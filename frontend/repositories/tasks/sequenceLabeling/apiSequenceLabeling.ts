@@ -1,10 +1,10 @@
 import { AnnotationRepository } from '@/domain/models/tasks/annotationRepository'
-import { SequenceLabelingLabel } from '~/domain/models/tasks/sequenceLabeling'
+import { Span } from '~/domain/models/tasks/sequenceLabeling'
 
 
-export class APISequenceLabelingRepository extends AnnotationRepository<SequenceLabelingLabel> {
+export class APISequenceLabelingRepository extends AnnotationRepository<Span> {
   constructor() {
-    super(SequenceLabelingLabel)
+    super(Span)
   }
 
   public async update(projectId: string, docId: number, annotationId: number, labelId: number) {
@@ -14,6 +14,6 @@ export class APISequenceLabelingRepository extends AnnotationRepository<Sequence
   }
 
   protected baseUrl(projectId: string, docId: number): string {
-    return `/projects/${projectId}/docs/${docId}/annotations`
+    return `/projects/${projectId}/examples/${docId}/spans`
   }
 }

@@ -2,8 +2,8 @@
   <v-card>
     <v-card-title v-if="isProjectAdmin">
       <action-menu
-        @upload="upload"
-        @download="dialogDownload=true"
+        @upload="$router.push('dataset/import')"
+        @download="$router.push('dataset/export')"
       />
       <v-btn
         class="text-capitalize ms-2"
@@ -34,11 +34,6 @@
         <form-delete-bulk
           @cancel="dialogDeleteAll=false"
           @remove="removeAll"
-        />
-      </v-dialog>
-      <v-dialog v-model="dialogDownload">
-        <form-download
-          @cancel="dialogDownload=false"
         />
       </v-dialog>
     </v-card-title>
@@ -78,7 +73,6 @@ import _ from 'lodash'
 import DocumentList from '@/components/example/DocumentList.vue'
 import FormDelete from '@/components/example/FormDelete.vue'
 import FormDeleteBulk from '@/components/example/FormDeleteBulk.vue'
-import FormDownload from '@/components/example/FormDownload.vue'
 import ImageList from '~/components/example/ImageList.vue'
 import AudioList from '~/components/example/AudioList.vue'
 import { ExampleListDTO, ExampleDTO } from '~/services/application/example/exampleData'
@@ -86,7 +80,6 @@ import ActionMenu from '~/components/example/ActionMenu.vue'
 import { ProjectDTO } from '~/services/application/project/projectData'
 
 export default Vue.extend({
-  layout: 'project',
 
   components: {
     ActionMenu,
@@ -95,26 +88,31 @@ export default Vue.extend({
     ImageList,
     FormDelete,
     FormDeleteBulk,
-    FormDownload,
   },
 
-  async fetch() {
-    this.isLoading = true
-    this.item = await this.$services.example.list(this.projectId, this.$route.query)
-    this.isLoading = false
+  layout: 'project',
+
+  validate({ params, query }) {
+    // @ts-ignore
+    return /^\d+$/.test(params.id) && /^\d+|$/.test(query.limit) && /^\d+|$/.test(query.offset)
   },
 
   data() {
     return {
       dialogDelete: false,
       dialogDeleteAll: false,
-      dialogDownload: false,
       project: {} as ProjectDTO,
       item: {} as ExampleListDTO,
       selected: [] as ExampleDTO[],
       isLoading: false,
       isProjectAdmin: false
     }
+  },
+
+  async fetch() {
+    this.isLoading = true
+    this.item = await this.$services.example.list(this.projectId, this.$route.query)
+    this.isLoading = false
   },
 
   computed: {
@@ -136,7 +134,7 @@ export default Vue.extend({
       } else {
         return 'text'
       }
-    }
+    },
   },
 
   watch: {
@@ -149,7 +147,7 @@ export default Vue.extend({
 
   async created() {
     this.project = await this.$services.project.findById(this.projectId)
-    this.isProjectAdmin = this.project.current_users_role.is_project_admin
+    this.isProjectAdmin = await this.$services.member.isProjectAdmin(this.projectId)
   },
 
   methods: {
@@ -165,9 +163,6 @@ export default Vue.extend({
       this.dialogDeleteAll = false
       this.selected = []
     },
-    upload() {
-      this.$router.push(`/projects/${this.projectId}/upload`)
-    },
     updateQuery(query: object) {
       this.$router.push(query)
     },
@@ -177,11 +172,6 @@ export default Vue.extend({
         query
       })
     }
-  },
-
-  validate({ params, query }) {
-    // @ts-ignore
-    return /^\d+$/.test(params.id) && /^\d+|$/.test(query.limit) && /^\d+|$/.test(query.offset)
   }
 })
 </script>

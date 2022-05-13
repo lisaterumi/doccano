@@ -1,19 +1,44 @@
 <template>
-  <base-card
-    :disabled="!valid"
-    :title="$t('overview.createProjectTitle')"
-    :agree-text="$t('generic.save')"
-    :cancel-text="$t('generic.cancel')"
-    @agree="$emit('save')"
-    @cancel="$emit('cancel')"
-  >
-    <template #content>
+  <v-card>
+    <v-card-title>{{ $t('overview.createProjectTitle') }}</v-card-title>
+    <v-card-text>
       <v-form v-model="valid">
+        <v-item-group
+          v-model="selected"
+          mandatory
+          @change="updateValue('projectType', projectTypes[selected])"
+        >
+          <v-row no-gutters>
+            <v-col v-for="(item, i) in projectTypes" :key="i">
+              <v-item v-slot="{ active, toggle }">
+                <v-card
+                  class="mb-6 me-6"
+                  max-width="350"
+                  outlined
+                >
+                  <v-img
+                    :src="require(`~/assets/images/tasks/${images[i]}`)"
+                    height="200"
+                    contain
+                    @click="toggle"
+                  />
+                  <v-card-title>
+                    <v-icon v-if="active">
+                      {{ mdiCheckBold }}
+                    </v-icon>
+                    {{ translateTypeName(item, $t('overview.projectTypes')) }}
+                  </v-card-title>
+                </v-card>
+              </v-item>
+            </v-col>
+          </v-row>
+        </v-item-group>
+        
         <v-text-field
           :value="name"
           :rules="projectNameRules($t('rules.projectNameRules'))"
           :label="$t('overview.projectName')"
-          prepend-icon="mdi-account-multiple"
+          outlined
           required
           autofocus
           @input="updateValue('name', $event)"
@@ -22,26 +47,22 @@
           :value="description"
           :rules="descriptionRules($t('rules.descriptionRules'))"
           :label="$t('generic.description')"
-          prepend-icon="mdi-clipboard-text"
+          outlined
           required
           @input="updateValue('description', $event)"
         />
-        <v-select
-          :value="projectType"
-          :items="projectTypes"
-          :rules="projectTypeRules($t('rules.projectTypeRules'))"
-          :label="$t('overview.projectType')"
-          prepend-icon="mdi-keyboard"
-          required
-          @input="updateValue('projectType', $event)"
-        >
-          <template v-slot:item="props">
-            {{ translateTypeName(props.item, $t('overview.projectTypes')) }}
-          </template>
-          <template v-slot:selection="props">
-            {{ translateTypeName(props.item, $t('overview.projectTypes')) }}
-          </template>
-        </v-select>
+        <v-combobox
+          :value="tags"
+          :items="tags"
+          label="Tags"
+          multiple
+          chips
+          outlined
+          dense
+          deletable-chips
+          hide-selected
+          @input="updateValue('tags', $event)"
+        />
         <v-checkbox
           v-if="hasSingleLabelOption"
           :value="singleClassClassification"
@@ -63,14 +84,20 @@
         />
         <v-checkbox
           v-if="isSequenceLabelingProject"
+          :value="useRelation"
+          label="Use relation labeling"
+          @change="updateValue('useRelation', $event === true)"
+        />
+        <v-checkbox
+          v-if="isSequenceLabelingProject"
           :value="graphemeMode"
           @change="updateValue('graphemeMode', $event === true)"
         >
-          <template v-slot:label>
+          <template #label>
             <div>
               Count
               <v-tooltip bottom>
-                <template v-slot:activator="{ on }">
+                <template #activator="{ on }">
                   <a
                     target="_blank"
                     href="https://unicode.org/reports/tr29/"
@@ -97,20 +124,27 @@
           @change="updateValue('enableShareAnnotation', $event === true)"
         />
       </v-form>
-    </template>
-  </base-card>
+    </v-card-text>
+    <v-card-actions class="ps-4">
+      <v-btn
+        :disabled="!valid"
+        color="primary"
+        style="text-transform: none"
+        outlined
+        @click="$emit('save')"
+      >
+        {{ $t('generic.create') }}
+      </v-btn>
+    </v-card-actions>
+  </v-card>
 </template>
 
 <script lang="ts">
 import Vue from 'vue'
-import BaseCard from '@/components/utils/BaseCard.vue'
+import { mdiCheckBold } from '@mdi/js'
 import { projectNameRules, descriptionRules, projectTypeRules } from '@/rules/index'
 
 export default Vue.extend({
-  components: {
-    BaseCard
-  },
-
   props: {
     name: {
       type: String,
@@ -149,6 +183,14 @@ export default Vue.extend({
     graphemeMode: {
       type: Boolean,
       default: false
+    },
+    useRelation: {
+      type: Boolean,
+      default: false
+    },
+    tags: {
+      type: Array,
+      default: () => [],
     }
   },
 
@@ -157,7 +199,9 @@ export default Vue.extend({
       valid: false,
       projectNameRules,
       projectTypeRules,
-      descriptionRules
+      descriptionRules,
+      mdiCheckBold,
+      selected: 0,
     }
   },
 
@@ -167,8 +211,19 @@ export default Vue.extend({
         'DocumentClassification',
         'SequenceLabeling',
         'Seq2seq',
+        'IntentDetectionAndSlotFilling',
         'ImageClassification',
         'Speech2text',
+      ]
+    },
+    images() {
+      return [
+        'text_classification.png',
+        'sequence_labeling.png',
+        'seq2seq.png',
+        'intent_detection.png',
+        'image_classification.png',
+        'speech_to_text.png'
       ]
     },
     hasSingleLabelOption() {

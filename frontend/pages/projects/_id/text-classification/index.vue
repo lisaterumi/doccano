@@ -1,6 +1,6 @@
 <template>
   <layout-text v-if="example.id">
-    <template v-slot:header>
+    <template #header>
       <toolbar-laptop
         :doc-id="example.id"
         :enable-auto-labeling.sync="enableAutoLabeling"
@@ -21,7 +21,7 @@
         class="d-flex d-sm-none"
       />
     </template>
-    <template v-slot:content>
+    <template #content>
       <v-card
         v-shortkey="shortKeys"
         @shortkey="annotateOrRemoveLabel(project.id, example.id, $event.srcKey)"
@@ -44,8 +44,9 @@
         />
       </v-card>
     </template>
-    <template v-slot:sidebar>
-      <list-metadata :metadata="example.meta" />
+    <template #sidebar>
+      <annotation-progress :progress="progress" />
+      <list-metadata :metadata="example.meta" class="mt-4" />
     </template>
   </layout-text>
 </template>
@@ -63,11 +64,12 @@ import { useExampleItem } from '@/composables/useExampleItem'
 import { useLabelList } from '@/composables/useLabelList'
 import { useProjectItem } from '@/composables/useProjectItem'
 import { useTeacherList } from '@/composables/useTeacherList'
+import AnnotationProgress from '@/components/tasks/sidebar/AnnotationProgress.vue'
 
 export default {
-  layout: 'workspace',
 
   components: {
+    AnnotationProgress,
     ButtonLabelSwitch,
     LabelGroup,
     LabelSelect,
@@ -76,12 +78,17 @@ export default {
     ToolbarLaptop,
     ToolbarMobile
   },
+  layout: 'workspace',
+
+  validate({ params, query }) {
+    return /^\d+$/.test(params.id) && /^\d+$/.test(query.page)
+  },
 
   setup() {
     const { app, params, query } = useContext()
     const projectId = params.value.id
     const { state: projectState, getProjectById } = useProjectItem()
-    const { state: exampleState, confirm, getExample } = useExampleItem()
+    const { state: exampleState, confirm, getExample, updateProgress } = useExampleItem()
     const {
       state: teacherState,
       annotateLabel,
@@ -92,11 +99,12 @@ export default {
       removeTeacher
     } = useTeacherList(app.$services.textClassification)
     const enableAutoLabeling = ref(false)
-    const { state: labelState, getLabelList, shortKeys } = useLabelList()
+    const { state: labelState, getLabelList, shortKeys } = useLabelList(app.$services.categoryType)
     const labelComponent = ref('label-group')
 
     getLabelList(projectId)
     getProjectById(projectId)
+    updateProgress(projectId)
 
     const { fetch } = useFetch(async() => {
       await getExample(
@@ -130,10 +138,6 @@ export default {
       removeTeacher,
       shortKeys,
     }
-  },
-
-  validate({ params, query }) {
-    return /^\d+$/.test(params.id) && /^\d+$/.test(query.page)
   }
 }
 </script>

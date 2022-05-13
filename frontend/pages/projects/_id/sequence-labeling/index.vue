@@ -1,6 +1,6 @@
 <template>
-  <layout-text v-if="doc.id">
-    <template v-slot:header>
+  <layout-text v-if="doc.id" v-shortkey="shortKeys" @shortkey="changeSelectedLabel">
+    <template #header>
       <toolbar-laptop
         :doc-id="doc.id"
         :enable-auto-labeling.sync="enableAutoLabeling"
@@ -16,7 +16,7 @@
         class="d-flex d-sm-none"
       />
     </template>
-    <template v-slot:content>
+    <template #content>
       <v-card>
         <div class="annotation-text pa-4">
           <entity-editor
@@ -24,20 +24,64 @@
             :rtl="isRTL"
             :text="doc.text"
             :entities="annotations"
-            :entity-labels="labels"
-            :relations="links"
-            :relation-labels="linkTypes"
+            :entity-labels="spanTypes"
+            :relations="relations"
+            :relation-labels="relationTypes"
             :allow-overlapping="project.allowOverlapping"
             :grapheme-mode="project.graphemeMode"
-            @addEntity="addEntity"
-            @click:entity="updateEntity"
-            @contextmenu:entity="deleteEntity"
+            :selected-label="selectedLabel"
+            :relation-mode="relationMode"
+            @addEntity="addSpan"
+            @addRelation="addRelation"
+            @click:entity="updateSpan"
+            @click:relation="updateRelation"
+            @contextmenu:entity="deleteSpan"
+            @contextmenu:relation="deleteRelation"
           />
         </div>
       </v-card>
     </template>
-    <template v-slot:sidebar>
-      <list-metadata :metadata="doc.meta" />
+    <template #sidebar>
+      <annotation-progress :progress="progress" />
+      <v-card class="mt-4">
+        <v-card-title>Label Types</v-card-title>
+        <v-card-text>
+          <v-switch
+            v-if="useRelationLabeling"
+            v-model="relationMode"
+          >
+            <template #label>
+              <span v-if="relationMode">Relation</span>
+              <span v-else>Span</span>
+            </template>
+          </v-switch>
+          <v-chip-group
+            v-model="selectedLabelIndex"
+            column
+          >
+            <v-chip
+              v-for="(item, index) in labelTypes"
+              :key="item.id"
+              v-shortkey="[item.suffixKey]"
+              :color="item.backgroundColor"
+              filter
+              :text-color="$contrastColor(item.backgroundColor)"
+              @shortkey="selectedLabelIndex = index"
+            >
+              {{ item.text }}
+              <v-avatar
+                v-if="item.suffixKey"
+                right
+                color="white"
+                class="black--text font-weight-bold"
+              >
+                {{ item.suffixKey }}
+              </v-avatar>
+            </v-chip>
+          </v-chip-group>
+        </v-card-text>
+      </v-card>
+      <list-metadata :metadata="doc.meta" class="mt-4" />
     </template>
   </layout-text>
 </template>
@@ -50,16 +94,39 @@ import ListMetadata from '@/components/tasks/metadata/ListMetadata'
 import ToolbarLaptop from '@/components/tasks/toolbar/ToolbarLaptop'
 import ToolbarMobile from '@/components/tasks/toolbar/ToolbarMobile'
 import EntityEditor from '@/components/tasks/sequenceLabeling/EntityEditor.vue'
+import AnnotationProgress from '@/components/tasks/sidebar/AnnotationProgress.vue'
 
 export default {
-  layout: 'workspace',
 
   components: {
+    AnnotationProgress,
     EntityEditor,
     LayoutText,
     ListMetadata,
     ToolbarLaptop,
     ToolbarMobile
+  },
+
+  layout: 'workspace',
+
+  validate({ params, query }) {
+    return /^\d+$/.test(params.id) && /^\d+$/.test(query.page)
+  },
+
+  data() {
+    return {
+      annotations: [],
+      docs: [],
+      spanTypes: [],
+      relations: [],
+      relationTypes: [],
+      project: {},
+      enableAutoLabeling: false,
+      rtl: false,
+      selectedLabelIndex: null,
+      progress: {},
+      relationMode: false,
+    }
   },
 
   async fetch() {
@@ -76,34 +143,47 @@ export default {
     await this.list(doc.id)
   },
 
-  data() {
-    return {
-      annotations: [],
-      docs: [],
-      labels: [],
-      links: [],
-      linkTypes: [],
-      project: {},
-      enableAutoLabeling: false,
-      rtl: false,
-    }
-  },
-
   computed: {
     ...mapGetters('auth', ['isAuthenticated', 'getUsername', 'getUserId']),
     ...mapGetters('config', ['isRTL']),
 
     shortKeys() {
-      return Object.fromEntries(this.labels.map(item => [item.id, [item.suffixKey]]))
+      return Object.fromEntries(this.spanTypes.map(item => [item.id, [item.suffixKey]]))
     },
+
     projectId() {
       return this.$route.params.id
     },
+
     doc() {
       if (_.isEmpty(this.docs) || this.docs.items.length === 0) {
         return {}
       } else {
         return this.docs.items[0]
+      }
+    },
+
+    selectedLabel() {
+      if (Number.isInteger(this.selectedLabelIndex)) {
+        if (this.relationMode) {
+          return this.relationTypes[this.selectedLabelIndex]
+        } else {
+          return this.spanTypes[this.selectedLabelIndex]
+        }
+      } else {
+        return null
+      }
+    },
+
+    useRelationLabeling() {
+      return !!this.project.useRelation
+    },
+
+    labelTypes() {
+      if (this.relationMode) {
+        return this.relationTypes
+      } else {
+        return this.spanTypes
       }
     }
   },
@@ -118,31 +198,57 @@ export default {
   },
 
   async created() {
-    this.labels = await this.$services.label.list(this.projectId)
-    this.linkTypes = await this.$services.linkTypes.list(this.projectId)
+    this.spanTypes = await this.$services.spanType.list(this.projectId)
+    this.relationTypes = await this.$services.relationType.list(this.projectId)
     this.project = await this.$services.project.findById(this.projectId)
+    this.progress = await this.$services.metrics.fetchMyProgress(this.projectId)
   },
 
   methods: {
-    async list(docId) {
-      const annotations = await this.$services.sequenceLabeling.list(this.projectId, docId);
-      const links = await this.$services.sequenceLabeling.listLinks(this.projectId);
-      this.annotations = annotations;
-      this.links = links;
+    async maybeFetchSpanTypes(annotations) {
+      const labelIds = new Set(this.spanTypes.map((label) => label.id));
+      if (annotations.some((item) => !labelIds.has(item.label))) {
+          this.spanTypes = await this.$services.spanType.list(this.projectId);
+      }
     },
 
-    async deleteEntity(id) {
+    async list(docId) {
+      const annotations = await this.$services.sequenceLabeling.list(this.projectId, docId)
+      const relations = await this.$services.sequenceLabeling.listRelations(this.projectId, docId)
+      // In colab mode, if someone add a new label and annotate data with the label during your work,
+      // it occurs exception because there is no corresponding label.
+      await this.maybeFetchSpanTypes(annotations)
+      this.annotations = annotations
+      this.relations = relations
+    },
+
+    async deleteSpan(id) {
       await this.$services.sequenceLabeling.delete(this.projectId, this.doc.id, id)
       await this.list(this.doc.id)
     },
 
-    async addEntity(startOffset, endOffset, labelId) {
+    async addSpan(startOffset, endOffset, labelId) {
       await this.$services.sequenceLabeling.create(this.projectId, this.doc.id, labelId, startOffset, endOffset)
       await this.list(this.doc.id)
     },
 
-    async updateEntity(annotationId, labelId) {
+    async updateSpan(annotationId, labelId) {
       await this.$services.sequenceLabeling.changeLabel(this.projectId, this.doc.id, annotationId, labelId)
+      await this.list(this.doc.id)
+    },
+
+    async addRelation(fromId, toId, typeId) {
+      await this.$services.sequenceLabeling.createRelation(this.projectId, this.doc.id, fromId, toId, typeId)
+      await this.list(this.doc.id)
+    },
+
+    async updateRelation(relationId, typeId) {
+      await this.$services.sequenceLabeling.updateRelation(this.projectId, this.doc.id, relationId, typeId)
+      await this.list(this.doc.id)
+    },
+
+    async deleteRelation(relationId) {
+      await this.$services.sequenceLabeling.deleteRelation(this.projectId, this.doc.id, relationId)
       await this.list(this.doc.id)
     },
 
@@ -159,14 +265,19 @@ export default {
       }
     },
 
+    async updateProgress() {
+      this.progress = await this.$services.metrics.fetchMyProgress(this.projectId)
+    },
+
     async confirm() {
       await this.$services.example.confirm(this.projectId, this.doc.id)
       await this.$fetch()
+      this.updateProgress()
     },
-  },
 
-  validate({ params, query }) {
-    return /^\d+$/.test(params.id) && /^\d+$/.test(query.page)
+    changeSelectedLabel(event) {
+      this.selectedLabelIndex = this.spanTypes.findIndex((item) => item.suffixKey === event.srcKey)
+    }
   }
 }
 </script>

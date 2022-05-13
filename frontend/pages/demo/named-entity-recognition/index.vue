@@ -47,11 +47,11 @@
 import EntityEditor from '@/components/tasks/sequenceLabeling/EntityEditor.vue'
 import ListMetadata from '@/components/tasks/metadata/ListMetadata'
 export default {
-  layout: 'demo',
   components: {
     EntityEditor,
     ListMetadata,
   },
+  layout: 'demo',
   data() {
     return {
       allowOverlapping: false,
@@ -170,6 +170,11 @@ export default {
   methods: {
     deleteEntity(annotationId) {
       this.currentDoc.annotations = this.currentDoc.annotations.filter(item => item.id !== annotationId)
+      this.relations.forEach((r) => {
+        if (r.fromId === annotationId || r.toId === annotationId) {
+          this.deleteRelation(r.id)
+        }
+      })
     },
     updateEntity(annotationId, labelId) {
       const index = this.currentDoc.annotations.findIndex(item => item.id === annotationId)

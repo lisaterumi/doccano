@@ -5,10 +5,9 @@ on:
     - cron: '0 10 * * *' # everyday at 10am
   push:
     branches:
-      - '**'
+      - master
     tags:
       - 'v*.*.*'
-  pull_request:
 
 jobs:
   docker:
@@ -46,7 +45,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: ./Dockerfile
+          file: ./docker/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.docker_meta.outputs.tags }}
           labels: ${{ steps.docker_meta.outputs.labels }}

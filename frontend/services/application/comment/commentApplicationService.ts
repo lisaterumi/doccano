@@ -1,5 +1,6 @@
-import { CommentReadDTO } from './commentData'
-import { CommentRepository } from '~/domain/models/comment/commentRepository'
+import { plainToInstance } from 'class-transformer'
+import { CommentReadDTO, CommentListDTO } from './commentData'
+import { CommentRepository, SearchOption } from '~/domain/models/comment/commentRepository'
 import { CommentItem } from '~/domain/models/comment/comment'
 
 export class CommentApplicationService {
@@ -7,9 +8,9 @@ export class CommentApplicationService {
     private readonly repository: CommentRepository
   ) {}
 
-  public async listProjectComment(projectId: string, q: string = ''): Promise<CommentReadDTO[]> {
-    const items = await this.repository.listAll(projectId, q)
-    return items.map(item => new CommentReadDTO(item))
+  public async listProjectComment(projectId: string, options: SearchOption): Promise<CommentListDTO> {
+    const item = await this.repository.listAll(projectId, options)
+    return new CommentListDTO(item)
   }
 
   public async list(projectId: string, docId: number): Promise<CommentReadDTO[]> {
@@ -21,15 +22,13 @@ export class CommentApplicationService {
     return this.repository.create(projectId, docId, text)
   }
 
-  public update(projectId: string, docId: number, item: CommentReadDTO): Promise<CommentItem> {
-    const comment = new CommentItem(
-      item.id, item.user, item.username, docId, item.text, item.createdAt
-    )
-    return this.repository.update(projectId, docId, comment)
+  public update(projectId: string, item: CommentReadDTO): Promise<CommentItem> {
+    const comment = plainToInstance(CommentItem, item)
+    return this.repository.update(projectId, comment)
   }
 
-  public delete(projectId: string, docId: number, item: CommentReadDTO): Promise<void> {
-    return this.repository.delete(projectId, docId, item.id)
+  public delete(projectId: string, item: CommentReadDTO): Promise<void> {
+    return this.repository.delete(projectId, item.id)
   }
 
   public deleteBulk(projectId: string, items: CommentReadDTO[]): Promise<void> {

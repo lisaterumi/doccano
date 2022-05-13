@@ -1,5 +1,5 @@
 export default {
-  createProjectTitle: 'Add Project',
+  createProjectTitle: 'Create a project',
   projectName: 'Project name',
   projectType: 'Project type',
   textClassification: 'Text Classification',
@@ -15,6 +15,7 @@ export default {
     'Text Classification',
     'Sequence Labeling',
     'Sequence to sequence',
+    'Intent Detection and Slot Filling',
     'Image Classification',
     'Speech to Text',
   ]

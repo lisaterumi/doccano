@@ -1,5 +1,5 @@
-import { ProjectDTO, ProjectWriteDTO } from './projectData'
-import { ProjectRepository } from '~/domain/models/project/projectRepository'
+import { ProjectDTO, ProjectWriteDTO, ProjectListDTO } from './projectData'
+import { ProjectRepository, SearchOption } from '~/domain/models/project/projectRepository'
 import { ProjectWriteItem } from '~/domain/models/project/project'
 
 
@@ -8,18 +8,17 @@ export class ProjectApplicationService {
     private readonly repository: ProjectRepository
   ) {}
 
-  public async list(): Promise<ProjectDTO[]> {
+  public async list(options: SearchOption): Promise<ProjectListDTO> {
     try {
-      const items = await this.repository.list()
-      return items.map(item => new ProjectDTO(item))
-    } catch(e) {
+      const items = await this.repository.list(options)
+      return new ProjectListDTO(items)
+    } catch(e: any) {
       throw new Error(e.response.data.detail)
     }
   }
 
   public async findById(id: string): Promise<ProjectDTO> {
     const item = await this.repository.findById(id)
-    const response = new ProjectDTO(item)
     return new ProjectDTO(item)
   }
 
@@ -28,7 +27,7 @@ export class ProjectApplicationService {
       const project = this.toWriteModel(item)
       const response = await this.repository.create(project)
       return new ProjectDTO(response)
-    } catch(e) {
+    } catch(e: any) {
       throw new Error(e.response.data.detail)
     }
   }
@@ -36,8 +35,9 @@ export class ProjectApplicationService {
   public async update(item: ProjectWriteDTO): Promise<void> {
     try {
       const project = this.toWriteModel(item)
+      project.tags = []
       await this.repository.update(project)
-    } catch(e) {
+    } catch(e: any) {
       throw new Error(e.response.data.detail)
     }
   }
@@ -58,7 +58,9 @@ export class ProjectApplicationService {
       item.enableShareAnnotation,
       item.singleClassClassification,
       item.allowOverlapping,
-      item.graphemeMode
+      item.graphemeMode,
+      item.useRelation,
+      item.tags
     )
   }
 }
